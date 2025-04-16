@@ -79,6 +79,8 @@ class Client:
                 self.running = False
                 break
 
+            message = f'{self.username}: {message}'
+
             cipher = ''
             for char in message:
                 cipher += f'{ord(char):03}'
