@@ -41,20 +41,23 @@ class Client:
 
         return True
 
-    def __get_key(self):
+    @staticmethod
+    def get_key():
         num = random.randint(10 ** 100, 10 ** 101)
         while True:
-            if self.miller_rabin(num):
+            if Client.miller_rabin(num):
                 return num
 
             num += 1
 
-    def __generate_key(self, phi):
+    @staticmethod
+    def generate_key(phi):
         for i in range(2, phi):
             if gcd(i, phi) == 1:
                 return i
 
-    def __get_reversed(self, key, phi):
+    @staticmethod
+    def get_reversed(key, phi):
         r, t = 0, 0
         new_t, new_r = 1, key
 
@@ -82,12 +85,12 @@ class Client:
         self.s.send(self.username.encode())
 
         # create key pairs(prime numbers)
-        p, q = self.__get_key(), self.__get_key()
+        p, q = self.get_key(), self.get_key()
         self.mod = p * q
         phi = (p - 1) * (q - 1)
 
-        encrypt_key = self.__generate_key(phi)
-        self.decrypt_key = self.__get_reversed(encrypt_key, phi)
+        encrypt_key = self.generate_key(phi)
+        self.decrypt_key = self.get_reversed(encrypt_key, phi)
 
         # exchange public keys
         self.s.send(encrypt_key.to_bytes(128))
@@ -95,6 +98,7 @@ class Client:
 
         # receive the encrypted secret key
         self.server_key = self.s.recv(1024).decode()
+        self.server_mod = self.s.recv(1024).decode()
 
         message_handler = threading.Thread(target=self.read_handler,args=())
         message_handler.start()
@@ -103,12 +107,16 @@ class Client:
 
     def read_handler(self): 
         while True:
-            message = self.s.recv(1024).decode()
-            key = self.s.recv(1024).decode()
-            mod = self.s.recv(1024).decode()
+            message = str(int.from_bytes(self.s.recv(1024)))
+            key = int.from_bytes(self.s.recv(1024))
+            mod = int.from_bytes(self.s.recv(1024))
 
             # decrypt message with the secrete key
-            decrypted = str(pow(int(message), int(key), int(mod)))
+            decrypted = str(pow(int(message), key, mod))
+
+            if len(decrypted) % 3 != 0:
+                decrypted = '0' + decrypted
+
             message = ''
             for i in range(0, len(decrypted), 3):
                 message += chr(int(decrypted[i:i + 3]))
@@ -123,9 +131,9 @@ class Client:
             for char in message:
                 cipher += f'{ord(char):03}'
 
-            crypted_msg = pow(int(cipher), self.decrypt_key, self.mod)
+            crypted_msg = pow(int(cipher), int(self.server_key), int(self.server_mod))
             self.s.send(str(crypted_msg).encode())
 
 if __name__ == "__main__":
-    cl = Client("127.0.0.1", 9001, "b_g")
+    cl = Client("127.0.0.1", 9010, "b_g")
     cl.init_connection()
