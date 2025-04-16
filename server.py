@@ -1,59 +1,74 @@
+"""Main server file for the chat application."""
 import socket
 import threading
 
-class Server:
+from utils import get_key, generate_key
 
+
+class Server:
+    """Class for the chat server."""
     def __init__(self, port: int) -> None:
         self.host = '127.0.0.1'
         self.port = port
         self.clients = []
-        self.username_lookup = {}
+        self.client_keys = {}
         self.s = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
 
     def start(self):
+        """Method to start the server."""
         self.s.bind((self.host, self.port))
         self.s.listen(100)
 
-        # generate keys ...
+        p, q = get_key(), get_key()
+        self.mod = p * q
+        phi = (p - 1) * (q - 1)
+
+        self.encrypt_key = generate_key(phi) # public key for the server
+        self.decrypt_key = pow(self.encrypt_key, -1, phi) # private key for the server
 
         while True:
             c, addr = self.s.accept()
             username = c.recv(1024).decode()
             print(f"{username} tries to connect")
-            self.broadcast(f'new person has joined: {username}')
-            self.username_lookup[c] = username
             self.clients.append(c)
 
-            # send public key to the client 
+            client_key = int.from_bytes(c.recv(128))
+            client_mod = int.from_bytes(c.recv(128))
 
-            # ...
+            self.client_keys[c] = (client_key, client_mod)
 
-            # encrypt the secret with the clients public key
+            c.send(self.encrypt_key.to_bytes(128))
+            c.send(self.mod.to_bytes(128))
 
-            # ...
-
-            # send the encrypted secret to a client 
-
-            # ...
+            self.broadcast(f'new person has joined: {username}')
 
             threading.Thread(target=self.handle_client,args=(c,addr,)).start()
 
     def broadcast(self, msg: str):
-        for client in self.clients: 
+        """Method to broadcast a message to all clients."""
+        for client in self.clients:
+            cipher = ''
+            for char in msg:
+                cipher += f'{ord(char):03}'
+            cipher = int(cipher)
 
-            # encrypt the message
+            client_key, client_mod = self.client_keys[client]
 
-            # ...
+            crypted_msg = pow(cipher, client_key, client_mod)
+            client.send(str(crypted_msg).encode())
 
-            client.send(msg.encode())
-
-    def handle_client(self, c: socket, addr): 
+    def handle_client(self, c: socket, addr):
+        """Method to handle incoming messages from a client."""
         while True:
-            msg = c.recv(1024)
+            msg = c.recv(1024).decode()
+            crypted = int(msg)
+            decrypted = pow(crypted, int(self.decrypt_key), int(self.mod))
 
             for client in self.clients:
                 if client != c:
-                    client.send(msg)
+                    client_key, client_mod = self.client_keys[client]
+                    crypted_msg = pow(int(decrypted), client_key, client_mod)
+                    client.send(str(crypted_msg).encode())
 
 if __name__ == "__main__":
     s = Server(9001)
