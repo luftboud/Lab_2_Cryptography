@@ -60,7 +60,12 @@ Each of the files initializes the following main variables:
 
 ---
 
-Additionally, we implemented a `broadcast` function that allows sending messages to **all** connected clients.
+Additionally, we implemented a `broadcast` function that allows sending messages to **all** connected clients and an ability to quit the conversation (the user has to type 'q').
+
+---
+### #️⃣ Hash
+
+Hash is calculated and sent together with a message (but as a separate instance). When the client gets the message - it calculates the hash out of it and compares with the recieved hash. If they are not the same - an error is raised.
 
 ---
 
