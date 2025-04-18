@@ -3,6 +3,7 @@ import socket
 import threading
 
 from utils import get_key, generate_key
+from hashlib import sha256
 
 
 class Server:
@@ -53,14 +54,17 @@ class Server:
             cipher = int(cipher)
 
             client_key, client_mod = self.client_keys[client]
+            hashed = sha256(str(cipher).encode())
 
             crypted_msg = pow(cipher, client_key, client_mod)
-            client.send(str(crypted_msg).encode())
+            client.send(crypted_msg.to_bytes(1024))
+            client.send(int(hashed.hexdigest(), 16).to_bytes(128))
 
     def handle_client(self, c: socket, addr):
         """Method to handle incoming messages from a client."""
         while True:
-            msg = c.recv(1024).decode()
+            msg = int.from_bytes(c.recv(1024))
+            hashed = c.recv(128)
             crypted = int(msg)
             decrypted = pow(crypted, int(self.decrypt_key), int(self.mod))
 
@@ -68,7 +72,8 @@ class Server:
                 if client != c:
                     client_key, client_mod = self.client_keys[client]
                     crypted_msg = pow(int(decrypted), client_key, client_mod)
-                    client.send(str(crypted_msg).encode())
+                    client.send(crypted_msg.to_bytes(1024))
+                    client.send(hashed)
 
 if __name__ == "__main__":
     s = Server(9001)

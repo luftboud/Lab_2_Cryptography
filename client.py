@@ -3,6 +3,8 @@ import socket
 import threading
 
 from utils import get_key, generate_key
+from hashlib import sha256
+
 
 class Client:
     """Client class for the chat application."""
@@ -50,12 +52,17 @@ class Client:
             if not self.s:
                 break
 
-            message = self.s.recv(1024).decode()
+            message = int.from_bytes(self.s.recv(1024))
+            hashed = int.from_bytes(self.s.recv(128))
 
             decrypted = str(pow(int(message), int(self.decrypt_key), int(self.mod)))
 
             if len(decrypted) % 3 != 0:
                 decrypted = '0' + decrypted
+
+            curr_hashed = sha256(decrypted.encode())
+            if int(curr_hashed.hexdigest(), 16) != hashed:
+                raise ValueError('The message was damaged.')
 
             message = ''
             for i in range(0, len(decrypted), 3):
@@ -67,26 +74,31 @@ class Client:
         """Method to handle sending messages to the server."""
         while self.running:
             message = input()
+            cipher = ''
             if message == 'q':
                 message = f'{self.username} has left the chat'
-                cipher = ''
                 for char in message:
                     cipher += f'{ord(char):03}'
 
+                hashed = sha256(cipher.encode())
+
                 crypted_msg = pow(int(cipher), int(self.server_key), int(self.server_mod))
-                self.s.send(str(crypted_msg).encode())
+                self.s.send(crypted_msg.to_bytes(1024))
+                self.s.send(int(hashed.hexdigest(), 16).to_bytes(128))
                 print("You have left the chat")
                 self.running = False
                 break
 
             message = f'{self.username}: {message}'
 
-            cipher = ''
             for char in message:
                 cipher += f'{ord(char):03}'
 
+            hashed = sha256(cipher.encode())
+
             crypted_msg = pow(int(cipher), int(self.server_key), int(self.server_mod))
-            self.s.send(str(crypted_msg).encode())
+            self.s.send(crypted_msg.to_bytes(1024))
+            self.s.send(int(hashed.hexdigest(), 16).to_bytes(128))
 
 
 if __name__ == "__main__":
